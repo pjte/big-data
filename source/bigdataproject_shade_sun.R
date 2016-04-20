@@ -1,3 +1,6 @@
+source("https://bioconductor.org/biocLite.R")
+biocLite("baySeq")
+biocLite("edgeR")
 library(edgeR)
 
 # Read in data file
