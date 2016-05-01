@@ -114,6 +114,7 @@ summary(DE)
 
 # Save results for all genes regardless of significance
 results.trmt <- as.data.frame(topTags(lrt.trmt, n = length(rownames(DGE$counts))))
+results.trmt<-cbind(results.trmt, V1=rownames(results.trmt))
 
 # Write results to a tab-delimited text file
 write.table(results.trmt,"Final_SHADE_SUN_results.txt",sep="\t",row.names=FALSE,quote=FALSE)
