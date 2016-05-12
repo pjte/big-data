@@ -18,6 +18,12 @@ data[is.na(data)]<-0
 # Round decimals up to nearest integer
 data<-ceiling(data)
 
+#remove apical meristem
+data<-data[,c(-1,-7,-32,-39,-51)]
+#remove floral meristem
+data<-data[,c(-30,-36)]
+
+
 # Filter out lowly expressed genes
 #  a. check distribution of counts for unfiltered genes
 summary(rowSums(data))
@@ -27,14 +33,14 @@ filtered <- data[rowSums(data > 10) >= 3,]
 summary(rowSums(filtered))
 
 # Boxplots - Added 1 to all filtered counts to avoid log2(0)
-png("pre-normalized_boxplots.png")
+png("Final_pre-normalized_boxplots.png")
 boxplot(log2(filtered+1),ylab="log2(Counts)",
         main="Pre-Normalized Filtered RNA-Seq Counts",xlab="Sample")
 # Two very interesting samples exist
 dev.off()
 
 # Scatterplot
-png("corr_scatterplot.png")
+png("Final_corr_scatterplot.png")
 pairs(log2(filtered[1:1000,1:10]))
 dev.off()
 # Notice biological replicates have high correlation
@@ -62,15 +68,66 @@ DGE
 
 # Distance between samples based on gene expression
 plotMDS(DGE, method = "bcv")
-# Outliers? SUN_2_SILIQUE & IMB211_SHADE_3_LEAF
+# Outliers? SUN_2_SILIQUE & IMB211_SHADE_3_LEAF --> not anymore when apical &floral meristem removed
 plotMDS(DGE, method = "bcv", top=5)
 
 # Boxplots - Added 1 to all filtered counts to avoid log2(0)
-png("normalized_boxplots.png")
+png("Final_normalized_boxplots.png")
 boxplot(log2(cpm(DGE)+1),ylab="log2(Counts)",
         main="Normalized Filtered RNA-Seq Counts",xlab="Sample")
 dev.off()
+###################################
+#Treatment only DE
+# Make design matrix
+design <- model.matrix(~trmt, data = grouptype)
+rownames(design) <- colnames(DGE)
 
+# Estimate dispersion
+# a. Overall dispersion
+DGE <- estimateGLMCommonDisp(DGE, design, verbose = TRUE)
+# b. Trended dispersion
+DGE <- estimateGLMTrendedDisp(DGE, design)
+# c. Gene-wise dispersion
+DGE <- estimateGLMTagwiseDisp(DGE, design)
+
+# Obtain summary of DGEList
+DGE
+
+# Plot biological coefficient of variation
+png("Trt_biological_coefficient_of_variation.png")
+plotBCV(DGE)
+dev.off()
+
+# Fit model using design matrix
+fit <- glmFit(DGE, design)
+
+# Identify differentially expressed genes 
+# between treatments using likelihood ratio test
+lrt.trmt <- glmLRT(fit, coef = "trmtSHADE")
+
+# Report topTags
+topTags(lrt.trmt)
+
+# Report how many are up- or down-regulated in shade relative to sun
+DE <- decideTestsDGE(lrt.trmt, adjust.method = "fdr", p.value = 0.01)
+summary(DE)
+
+# Save results for all genes regardless of significance
+results.trmt <- as.data.frame(topTags(lrt.trmt, n = length(rownames(DGE$counts))))
+results.trmt<-cbind(results.trmt, V1=rownames(results.trmt))
+
+# Write results to a tab-delimited text file
+write.table(results.trmt,"Final_SHADE_SUN_results.txt",sep="\t",row.names=FALSE,quote=FALSE)
+
+# Make MA plot
+pdf("Final_MAplottrmt.pdf")
+detags <- rownames(DGE)[as.logical(DE)]
+plotSmear(lrt.trmt, de.tags = detags)
+abline(h = c(-1, 1), col="blue")
+dev.off()
+
+#################################
+#G & E
 # Make design matrix
 design <- model.matrix(~ geno + trmt, data = grouptype)
 rownames(design) <- colnames(DGE)
@@ -87,7 +144,7 @@ DGE <- estimateGLMTagwiseDisp(DGE, design)
 DGE
 
 # Plot biological coefficient of variation
-png("biological_coefficient_of_variation.png")
+png("Final_biological_coefficient_of_variation.png")
 plotBCV(DGE)
 dev.off()
 
@@ -110,10 +167,10 @@ summary(DE)
 results.geno <- as.data.frame(topTags(lrt.geno, n = length(rownames(DGE$counts))))
 
 # Write results to a tab-delimited text file
-write.table(results,"IMB211_R500_results.txt",sep="\t",row.names=FALSE,quote=FALSE)
+write.table(results.geno,"Final_IMB211_R500_results.txt",sep="\t",row.names=FALSE,quote=FALSE)
 
 # Make MA plot
-pdf("MAplotgeno.pdf")
+pdf("Final_MAplotgeno.pdf")
 detags <- rownames(DGE)[as.logical(DE)]
 plotSmear(lrt.geno, de.tags = detags)
 abline(h = c(-1, 1), col="blue")
@@ -137,3 +194,4 @@ plotDE(rownames(results.geno),DGE,grouptype)
 
 plotDE("Bra009785",DGE,grouptype)
 ################################
+
